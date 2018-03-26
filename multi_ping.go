@@ -21,21 +21,32 @@ type response struct {
 	seqn int           // Sequence number
 }
 
+//Ping function in which we get the paramters to build the ICMP message.
+//This function includes the basic paramaters to create the customer ICMP message we will be working with.
 func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, trainI, gamma int, pattern []int) {
+
+	//We intialize the pinger
 	p := mpping.NewPinger()
+
+	//Set the network protocol to use, TCP by default, UDP if specified explicitly.
 	if useUDP {
 		p.Network("udp")
 	}
 
+	//Debug flag to be sert.
 	if debug {
 		p.Debug = true
 	}
 
+	//The Network protocol by default is IPv4
+	//if the character ':' is identified, it means it is an IPv6 address.
 	netProto := "ip4:icmp"
 	if strings.Index(hostname, ":") != -1 {
 		netProto = "ip6:ipv6-icmp"
 	}
 
+	//This methods resolves the IP address as the received string "hostname"
+	//the network library returns it with the network format and the IP address.
 	//ra will be the receiver address.
 	//if we fail to setup the receiver address, we get an error.
 	ra, err := net.ResolveIPAddr(netProto, hostname)
@@ -49,12 +60,12 @@ func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, 
 		p.Source(source)
 	}
 
-	//If we are using more than on train, then we set the train interval to work with in Milliseconds.
+	//If we are using more than one train, then we set the train interval to work with in Milliseconds.
 	if trainS > 1 {
-		p.Train = true
-		p.TrainSize = trainS
+		p.Train = true       //Train usage flag
+		p.TrainSize = trainS // Train size
 		if trainI > 0 {
-			p.TrainInt = time.Duration(trainI) * time.Millisecond
+			p.TrainInt = time.Duration(trainI) * time.Millisecond //Train spacing interval is defined if TrainI parameter is greater than 0
 		}
 	}
 
@@ -62,29 +73,51 @@ func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, 
 		p.Gamma = time.Duration(gamma) * time.Millisecond
 	}
 
+	//Here we define tha array of sizes to be used.
+	//if it is greater than 0 then we set pattern with the values received.
 	if len(pattern) > 0 {
 		p.SetPattern(pattern)
 	}
 
+	//As we are only using one single IP address, we take the one we received in the "hostname" variable.
 	p.AddIPAddr(ra)
 
+	//We create two channels, two dynamically sized arrays.
+	//OnRecv, for the responses received, each response will have, replier address, RTT and sequence number.
+
+	//onIdle, we receive a boolen to know once the RTT has been exceeded.
 	onRecv, onIdle := make(chan *response), make(chan bool)
+
+	//When we get the event onRecv we add a response to the OnRecv channel.
+	//The reponse will be composed by the IP address of the replier (as a pointer), the RTT and the sequence number.
 	p.OnRecv = func(addr *net.IPAddr, t time.Duration, seqn int) {
 		onRecv <- &response{addr: addr, rtt: t, seqn: seqn}
 	}
+
+	//Once the RTT has been execeded, the onIdle event is triggered and we set the flag to true.
 	p.OnIdle = func() {
 		onIdle <- true
 	}
 
+	//As we are implement RunLoop, we will use the MaxRTT as the interval between trains of probes.
+	//i = interval between trains.
+	//I = interval between pings within a train.
 	p.MaxRTT = time.Duration(interval) * time.Millisecond
 
+	//Sent keeps track of probes sent, received of the received ones and
+	//crec is the flag to identify if we have entered the onRecv event.
 	var sent, received, crec int
 	var min, max, avg, mdev float32
+
+	//We create a slice, dynamically array to hold the RTT value of the replies received.
 	results := make([]float32, 0)
 
+	//We create a slice, dynamically array to hold the RTT value of the replies received.
 	replies := make(map[string]*response)
+	//As we are only using one IP address we set the key for the replies array.
 	replies[ra.String()] = nil
 
+	//Printing initial message to format the output in the standard ping output.
 	fmt.Printf("PING %s (%s) %d(%d) bytes of data\n", hostname, ra.String(), 0, 0)
 	st := time.Now()
 
