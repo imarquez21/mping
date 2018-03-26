@@ -119,11 +119,17 @@ func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, 
 
 	//Printing initial message to format the output in the standard ping output.
 	fmt.Printf("PING %s (%s) %d(%d) bytes of data\n", hostname, ra.String(), 0, 0)
+
+	//Time stamp of the experiment time.
 	st := time.Now()
 
+	//We initialize packets sents with the size of the probes defined.
 	sent = trainS
+
+	//We use the recursive option to send pings repeadetly
 	p.RunLoop()
 
+	//Dynamic size array to hold the values of type OS signal.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
