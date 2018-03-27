@@ -112,9 +112,12 @@ func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, 
 	//We create a slice, dynamically array to hold the RTT value of the replies received.
 	results := make([]float32, 0)
 
-	//We create a slice, dynamically array to hold the RTT value of the replies received.
+	//We create a slice, dynamically array to hold the 'responses' obtained when we get a reply and trigger the onRecv event.
+	//The key is the IP address we are pinging to in String format, the responses are stored in "response" pointer type.
 	replies := make(map[string]*response)
-	//As we are only using one IP address we set the key for the replies array.
+
+	//As we are only using one IP address we set the key for the replies array to the single IP addres we are working with.
+	//That IP address is held in the ra variable.
 	replies[ra.String()] = nil
 
 	//Printing initial message to format the output in the standard ping output.
@@ -123,14 +126,18 @@ func ping(hostname, source string, useUDP, debug bool, count, interval, trainS, 
 	//Time stamp of the experiment time.
 	st := time.Now()
 
-	//We initialize packets sents with the size of the probes defined.
+	//We initialize the number of packet sent with the size of the train we have defined.
+	//For example if we are going to send trains of 3 pings, the packets sents in the 1st iteration is 3.
 	sent = trainS
 
 	//We use the recursive option to send pings repeadetly
 	p.RunLoop()
 
-	//Dynamic size array to hold the values of type OS signal.
+	//We create a channel to hold the signal received from the OS to interrupt or terminate the script execution.
 	c := make(chan os.Signal, 1)
+
+	//We add two values within it, the interrupt and the terminate.
+	//These two values have been addded to the 'c' dynamic array created before.
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
 
@@ -143,7 +150,10 @@ loop:
 			results = append(results, float32(res.rtt)/float32(time.Millisecond))
 			received++
 			crec++
+			fmt.Printf("We have gotten a response, therefore we have entered onRecv event.\n")
+			fmt.Printf("RTT of response is %v, which is lower than RTT threshold: %v\n", res.rtt, p.MaxRTT)
 			fmt.Printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.2f ms\n", p.Size+56, res.addr, res.seqn, 128, float32(res.rtt)/float32(time.Millisecond))
+			fmt.Printf("===================================================================================\n")
 
 			if _, ok := replies[res.addr.String()]; ok {
 				replies[res.addr.String()] = res
@@ -153,8 +163,10 @@ loop:
 				break loop
 			}
 		case <-onIdle:
-			//res := <-onRecv
-
+			res2 := <-onRecv
+			fmt.Printf("We have entered onIdle, means the response RTT was bigger than the threshold defined.\n")
+			fmt.Printf("RTT of response is %v, which is lower than RTT threshold: %v\n", res2.rtt, p.MaxRTT)
+			fmt.Printf("===================================================================================\n")
 			if sent/trainS >= count {
 				break loop
 			}
